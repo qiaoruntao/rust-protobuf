@@ -126,7 +126,7 @@ impl<'o> UnknownValueRef<'o> {
 ///
 /// See [`UnknownFields`](crate::UnknownFields) for explanations.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Hash)]
-pub(crate) struct UnknownValues {
+pub struct UnknownValues {
     /// 32-bit unknowns
     pub(crate) fixed32: Vec<u32>,
     /// 64-bit unknowns
@@ -185,7 +185,7 @@ impl<'a> IntoIterator for &'a UnknownValues {
 }
 
 /// Iterator over unknown values
-pub(crate) struct UnknownValuesIter<'o> {
+pub struct UnknownValuesIter<'o> {
     fixed32: slice::Iter<'o, u32>,
     fixed64: slice::Iter<'o, u64>,
     varint: slice::Iter<'o, u64>,
@@ -234,7 +234,7 @@ pub struct UnknownFields {
     // Note, Google Protobuf C++ simply uses linear map (which can exploitable the same way),
     // and Google Protobuf Java uses tree map to store unknown fields
     // (which is more expensive than hashmap).
-    fields: Option<Box<HashMap<u32, UnknownValues, BuildHasherDefault<DefaultHasher>>>>,
+    pub fields: Option<Box<HashMap<u32, UnknownValues, BuildHasherDefault<DefaultHasher>>>>,
 }
 
 /// Very simple hash implementation of `Hash` for `UnknownFields`.

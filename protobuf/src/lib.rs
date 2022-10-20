@@ -27,7 +27,7 @@
 //!   `.proto` file parser. Rarely need to be used directly,
 //!   but can be used for mechanical processing of `.proto` files.
 
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub use crate::coded_input_stream::CodedInputStream;
@@ -88,7 +88,7 @@ mod cached_size;
 mod chars;
 mod fixed;
 mod special;
-mod unknown;
+pub mod unknown;
 mod varint;
 mod zigzag;
 

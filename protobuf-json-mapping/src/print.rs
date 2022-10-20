@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fmt;
-use std::fmt::Write as fmt_Write;
+use std::fmt::{Debug, Write as fmt_Write};
+use std::hash::Hash;
 
 use protobuf::reflect::EnumDescriptor;
 use protobuf::reflect::EnumValueDescriptor;
@@ -28,9 +30,11 @@ use protobuf::well_known_types::wrappers::Int64Value;
 use protobuf::well_known_types::wrappers::StringValue;
 use protobuf::well_known_types::wrappers::UInt32Value;
 use protobuf::well_known_types::wrappers::UInt64Value;
-use protobuf::MessageDyn;
-
+use protobuf::{MessageDyn, UnknownValueRef};
+use protobuf::rt::WireType;
+use protobuf::unknown::{UnknownValue, UnknownValues};
 use crate::base64;
+use crate::base64::encode;
 use crate::float;
 use crate::rfc_3339::TmUtc;
 use crate::well_known_wrapper::WellKnownWrapper;
@@ -305,7 +309,7 @@ impl<'a> ObjectKey for ReflectValueRef<'a> {
             ReflectValueRef::U64(v) => return w.print_printable(v),
             ReflectValueRef::I64(v) => return w.print_printable(v),
             ReflectValueRef::Enum(d, v) if !w.print_options.enum_values_int => {
-                return w.print_enum(d, *v)
+                return w.print_enum(d, *v);
             }
             _ => {}
         }
@@ -364,9 +368,9 @@ impl Printer {
     }
 
     fn print_list<I>(&mut self, items: I) -> PrintResult<()>
-    where
-        I: IntoIterator,
-        I::Item: PrintableToJson,
+        where
+            I: IntoIterator,
+            I::Item: PrintableToJson,
     {
         write!(self.buf, "[")?;
         for (i, item) in items.into_iter().enumerate() {
@@ -384,10 +388,10 @@ impl Printer {
     }
 
     fn print_object<I, K, V>(&mut self, items: I) -> PrintResult<()>
-    where
-        I: IntoIterator<Item = (K, V)>,
-        K: ObjectKey,
-        V: PrintableToJson,
+        where
+            I: IntoIterator<Item=(K, V)>,
+            K: ObjectKey,
+            V: PrintableToJson,
     {
         write!(self.buf, "{{")?;
         for (i, (k, v)) in items.into_iter().enumerate() {
@@ -525,6 +529,45 @@ impl Printer {
                 }
             }
         }
+        // println!("handling struct");
+        if let Some(unknown_fields) = message.unknown_fields_dyn().fields.clone() {
+            // println!("handling unknown fields");
+            let mut specials: HashMap<u32, Vec<String>> = HashMap::new();
+            for (&tag_num, values) in unknown_fields.iter() {
+                for x in values.iter() {
+                    let mut entry = specials.entry(tag_num).or_insert_with(Default::default);
+                    match &x {
+                        UnknownValueRef::Fixed32(val) => {
+                            entry.push(format!("\"u32\":{}", val));
+                        }
+                        UnknownValueRef::Fixed64(val) => {
+                            entry.push(format!("\"u64\":{:?}", val));
+                        }
+                        UnknownValueRef::Varint(val) => {
+                            entry.push(format!("\"u64\":{:?}", val));
+                        }
+                        UnknownValueRef::LengthDelimited(val) => {
+                            entry.push(format!("\"payload\":\"{}\"", encode(val)));
+                        }
+                    }
+                }
+            }
+            self.print_comma_but_first(&mut first)?;
+            write!(self.buf, "\"specials\": {{")?;
+            let mut inner_first = true;
+            // dbg!(&specials);
+            for (tag_num, values) in specials {
+                self.print_comma_but_first(&mut inner_first)?;
+                write!(self.buf, "\"{}\": [", tag_num)?;
+                let mut inner2_first = true;
+                for value in values {
+                    self.print_comma_but_first(&mut inner2_first)?;
+                    write!(self.buf, "{{{}}}", value)?;
+                }
+                write!(self.buf, "]")?;
+            }
+            write!(self.buf, "}}")?;
+        }
         write!(self.buf, "}}")?;
         Ok(())
     }
@@ -534,9 +577,9 @@ impl Printer {
     }
 
     fn print_wrapper<W>(&mut self, value: &W) -> PrintResult<()>
-    where
-        W: WellKnownWrapper,
-        W::Underlying: PrintableToJson,
+        where
+            W: WellKnownWrapper,
+            W::Underlying: PrintableToJson,
     {
         self.print_printable(value.get_ref())
     }
